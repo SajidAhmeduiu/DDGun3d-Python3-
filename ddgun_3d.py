@@ -25,8 +25,8 @@
 ##
 
 
-import os, sys, cPickle, tempfile, argparse
-from commands import getstatusoutput
+import os, sys, pickle, tempfile, argparse
+from subprocess import getstatusoutput
 import numpy as np
 
 global pblast, uniref90, at, pdssp, pprof, prog_path, data_path, aalist
@@ -86,7 +86,7 @@ def get_options():
 	pdbfile=args.pdbfile
 	chain=args.chain
 	if os.path.isfile(pdbfile)==False:	
-		print >> sys.stderr,'ERROR: Incorrect PDB file '+pdbfile+'.'
+		print('ERROR: Incorrect PDB file '+pdbfile+'.', file=sys.stderr)
 		sys.exit(1)
 	if args.aa1: aa1=args.aa1
 	if args.aa2: aa2=args.aa2
@@ -101,10 +101,10 @@ def get_options():
 	if args.dbfile: uniref90=args.dbfile
 	if args.hhblits: pblast=args.hhblits
 	if not os.path.isfile(pblast):
-		print >> sys.stderr,'ERROR: hhblits program not found in',pblast
+		print('ERROR: hhblits program not found in',pblast, file=sys.stderr)
 		sys.exit(4)
 	if not os.path.isfile(uniref90+'_a3m_db.index'):
-		print >> sys.stderr,'ERROR: DB file clust30_2018_08 not found in',uniref90
+		print('ERROR: DB file clust30_2018_08 not found in',uniref90, file=sys.stderr)
 		sys.exit(5)
 	if args.ml:
 		if parse_mut(args.mutations): 
@@ -114,10 +114,10 @@ def get_options():
 			lmut=open(args.mutations).read()
 			muts=dict((sort_mut(mut),sort_mut(mut).split(sep)) for mut in lmut.replace(' ','').split('\n') if parse_mut(mut))
 	if len(muts)==0:
-		print >> sys.stderr,'ERROR: Incorrect mutation list.'
+		print('ERROR: Incorrect mutation list.', file=sys.stderr)
 		sys.exit(2)
 	if dmin>=dmax:
-		print >> sys.stderr,'ERROR: Incorrect radius distance range ',dmin,dmax
+		print('ERROR: Incorrect radius distance range ',dmin,dmax, file=sys.stderr)
 		sys.exit(3)
 	return pdbfile,chain,muts,[aa1,aa2,aa3,raa3],[dmin,dmax],win,verb,outfile,outdir
     
@@ -143,7 +143,7 @@ def parse_mut(imut,sep=','):
 		except:
 			c=False
 		if not c:
-			if mut!='': print >> sys.stderr,'WARNING: Incorrect mutation',imut 
+			if mut!='': print('WARNING: Incorrect mutation',imut, file=sys.stderr) 
 			break
 	return c
 
@@ -174,7 +174,7 @@ def ali2fasta(filein,fileout):
 def get_dssp_rsa(dsspfile,chain,l_mut):
 	l_rsa={}
 	odssp=dssp.getAccfromNumbers(dsspfile,chain)
-	for i in l_mut.keys():
+	for i in list(l_mut.keys()):
 		v_mut=l_mut[i]
 		i_rsa=[]
 		for mut in v_mut:
@@ -200,7 +200,7 @@ def get_env_residue(pdbfile,chain,l_mut,d=[0.0,5.0],atoms=at):
 	lnres={}
 	och=pdb.readPDB(pdbfile,chain,atoms)
 	lres=och.getPDBNumbers()
-	for i in l_mut.keys():
+	for i in list(l_mut.keys()):
 		v_mut=l_mut[i]
 		v_dat=[]
 		v_res=[]
@@ -212,7 +212,7 @@ def get_env_residue(pdbfile,chain,l_mut,d=[0.0,5.0],atoms=at):
 			new=mut[-1]
 			r_i=och.getResidueByNumber(pos)
 			if not r_i or r_i.NameOne!=wt:
-				print >> sys.stderr,'WARNING: Incorrect residue',mut[:-1]
+				print('WARNING: Incorrect residue',mut[:-1], file=sys.stderr)
 				v_dat=[]
 				v_res=[]
 				break
@@ -231,7 +231,7 @@ def get_env_residue(pdbfile,chain,l_mut,d=[0.0,5.0],atoms=at):
 
 
 def get_pot_res(res,pot='KYTJ820101'):
-	dpot=cPickle.load(open(data_path+'/aaindex1.pkl')).get(pot,{})
+	dpot=pickle.load(open(data_path+'/aaindex1.pkl',"rb")).get(pot,{})
 	return dpot.get(res,0.0)
 
 
@@ -239,21 +239,21 @@ def get_pot_3d(pdbfile,chain,hsspfile,l_mut,d=[0.0,5.0],pot='BASU010101'):
 	l_score={}
 	l_nres={}
 	n=len(l_mut)
-	dpot=cPickle.load(open(data_path+'/aaindex3.pkl')).get(pot,{})
-	if len(dpot.keys())==0:
-		print >> sys.stderr,'Incorrect potential',pot
+	dpot=pickle.load(open(data_path+'/aaindex3.pkl',"rb")).get(pot,{})
+	if len(list(dpot.keys()))==0:
+		print('Incorrect potential',pot, file=sys.stderr)
 		return l_nres,l_score
 	dhssp=get_hssp(hsspfile)
 	l_pos,l_nres,lres_env=get_env_residue(pdbfile,chain,l_mut,d)
 	if len(l_nres)==0:
-		print >> sys.stderr,'ERROR: Incorrect mutation list.'
+		print('ERROR: Incorrect mutation list.', file=sys.stderr)
 		sys.exit(0)
-	for i in l_mut.keys():
+	for i in list(l_mut.keys()):
 		v_mut=l_mut[i]
 		v_dat=[]
 		res_env=lres_env.get(i,[])
 		if len(res_env)==0:
-			print >> sys.stderr,'WARNING: No residues around',i
+			print('WARNING: No residues around',i, file=sys.stderr)
 			continue
 		for j in range(len(v_mut)):
 			mut=v_mut[j]
@@ -263,7 +263,7 @@ def get_pot_3d(pdbfile,chain,hsspfile,l_mut,d=[0.0,5.0],pot='BASU010101'):
 			pos=mut[1:-1]
 			new=mut[-1]
 			if not res_env[j]:
-				print >> sys.stderr,'WARNING: No residues around',wt+pos
+				print('WARNING: No residues around',wt+pos, file=sys.stderr)
 				v_dat=[]
 				break
 			#print mut,res_env[j]
@@ -284,12 +284,12 @@ def get_pot_3d(pdbfile,chain,hsspfile,l_mut,d=[0.0,5.0],pot='BASU010101'):
 def get_pot_prof(hsspfile,l_mut,pot='KYTJ820101'):
 	l_score={}
 	l_hssp={}
-	dpot=cPickle.load(open(data_path+'/aaindex1.pkl')).get(pot,{})
-	if len(dpot.keys())==0:
-		print >> sys.stderr,'Incorrect potential',pot
+	dpot=pickle.load(open(data_path+'/aaindex1.pkl',"rb")).get(pot,{})
+	if len(list(dpot.keys()))==0:
+		print('Incorrect potential',pot, file=sys.stderr)
 		return l_score
 	dhssp=get_hssp(hsspfile)
-	for i in l_mut.keys():
+	for i in list(l_mut.keys()):
 		v_mut=l_mut[i]
 		v_dat=[]
 		v_prof=[]
@@ -300,8 +300,8 @@ def get_pot_prof(hsspfile,l_mut,pot='KYTJ820101'):
 			pos=int(mut[1:-1])
 			new=mut[-1]
 			prof=dhssp.get(pos,{})
-			if len(prof.keys())==0 or prof['WT']!=wt: 
-				print >> sys.stderr,'WARNING: Profile position',pos,'not found or incorrect residue.'
+			if len(list(prof.keys()))==0 or prof['WT']!=wt: 
+				print('WARNING: Profile position',pos,'not found or incorrect residue.', file=sys.stderr)
 				v_dat=[]
 				v_prof=[]
 				break
@@ -316,12 +316,12 @@ def get_pot_prof(hsspfile,l_mut,pot='KYTJ820101'):
 
 def get_subs_prof(hsspfile,l_mut,pot='HENS920102'):
 	l_score={}
-	dpot=cPickle.load(open(data_path+'/aaindex2.pkl')).get(pot,{})
-	if len(dpot.keys())==0:
-		print >> sys.stderr,'Incorrect potential',pot
+	dpot=pickle.load(open(data_path+'/aaindex2.pkl',"rb")).get(pot,{})
+	if len(list(dpot.keys()))==0:
+		print('Incorrect potential',pot, file=sys.stderr)
 		return l_score
 	dhssp=get_hssp(hsspfile)
-	for i in l_mut.keys():
+	for i in list(l_mut.keys()):
 		v_mut=l_mut[i]
 		v_dat=[]
 		for mut in v_mut:
@@ -331,8 +331,8 @@ def get_subs_prof(hsspfile,l_mut,pot='HENS920102'):
 			pos=int(mut[1:-1])
 			new=mut[-1]
 			prof=dhssp.get(pos,{})
-			if len(prof.keys())==0 or prof['WT']!=wt: 
-				print >> sys.stderr,'WARNING: Profile position',pos,'not found or incorrect residue.'
+			if len(list(prof.keys()))==0 or prof['WT']!=wt: 
+				print('WARNING: Profile position',pos,'not found or incorrect residue.', file=sys.stderr)
 				v_dat=[]
 				break
 			for aa in aalist:
@@ -345,13 +345,13 @@ def get_subs_prof(hsspfile,l_mut,pot='HENS920102'):
 
 def get_seq_prof(hsspfile,l_mut,w=2,pot='SKOJ970101'):
 	l_score={}
-	dpot=cPickle.load(open(data_path+'/aaindex3.pkl')).get(pot,{})
-	if len(dpot.keys())==0:
-		print >> sys.stderr,'Incorrect potential',pot
+	dpot=pickle.load(open(data_path+'/aaindex3.pkl',"rb")).get(pot,{})
+	if len(list(dpot.keys()))==0:
+		print('Incorrect potential',pot, file=sys.stderr)
 		return l_score
 	dhssp=get_hssp(hsspfile)
-	n=len(dhssp.keys())
-	for i in l_mut.keys():
+	n=len(list(dhssp.keys()))
+	for i in list(l_mut.keys()):
 		v_mut=l_mut[i]
 		v_dat=[]
 		for mut in v_mut:
@@ -361,13 +361,13 @@ def get_seq_prof(hsspfile,l_mut,w=2,pot='SKOJ970101'):
 			pos=int(mut[1:-1])
 			new=mut[-1]
 			prof=dhssp.get(pos,{})
-			if len(prof.keys())==0 or prof['WT']!=wt: 
-				print >> sys.stderr,'WARNING: Profile position',pos,'not found or incorrect residue.'
+			if len(list(prof.keys()))==0 or prof['WT']!=wt: 
+				print('WARNING: Profile position',pos,'not found or incorrect residue.', file=sys.stderr)
 				v_dat.append(None)
 				continue
 			s=max(1,pos-w)
 			e=min(n,pos+w)
-			for j in range(s,pos)+range(pos+1,e+1):
+			for j in list(range(s,pos))+list(range(pos+1,e+1)):
 				iprof=dhssp.get(j,{})
 				for aa in aalist:
 					swt=swt+dpot.get((aa,wt),0.0)*iprof.get(aa,0.0)*0.01
@@ -396,44 +396,44 @@ def run_3d_pipeline(pdbfile,chain,blast_prog=pblast,db=uniref90,outdir=None,atom
 	och.writePDB(chainfile,[],'Y',chain,'Y')
 	seq=och.getSequence()
 	if seq=='':
-		print >> sys.stderr,'ERROR: Incorrect PDB file',pdbfile,'or chain',chain
+		print('ERROR: Incorrect PDB file',pdbfile,'or chain',chain, file=sys.stderr)
 		getstatusoutput('rm -r '+chainfile+' '+rd)
 		sys.exit(1)
 	f=open(seqfile,'w')
 	f.write('>'+pdbname+'.'+chain+'\n'+seq)
 	f.close()
 	if os.path.isfile(chainfile)==False:
-		print >> sys.stderr,'ERROR: Chain file',chain,'not found.'
+		print('ERROR: Chain file',chain,'not found.', file=sys.stderr)
 		sys.exit(2)
 	if os.path.isfile(dsspfile)==False: 
 		cmd=dssp_prog+' '+chainfile+' '+dsspfile
-		print >> sys.stderr,'1) Generate DSSP File'
-		print >> sys.stderr,cmd
+		print('1) Generate DSSP File', file=sys.stderr)
+		print(cmd, file=sys.stderr)
 		out=getstatusoutput(cmd)
 	if os.path.isfile(dsspfile)==False:
-		print >> sys.stderr,'ERROR: DSSP file',chain,'not found.'
+		print('ERROR: DSSP file',chain,'not found.', file=sys.stderr)
 		getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+rd)
 		sys.exit(3)
 	if os.path.isfile(blastfile)==False:
 		#cmd=blast_prog+' -i '+seqfile+' -d '+db+' -e '+str(e)+' -j 1 -b 1000 -v 1000 -o '+blastfile
 		cmd=blast_prog+' -d  '+db+'  -i '+seqfile+' -opsi '+blastfile+'x  -n 2 -cpu 4 '
-		print >> sys.stderr,'2) Run HHBLITS Search'
-		print >> sys.stderr,cmd
+		print('2) Run HHBLITS Search', file=sys.stderr)
+		print(cmd, file=sys.stderr)
 		out=getstatusoutput(cmd)
 		if out[0]!=0:
-			print >> sys.stderr,'HHBLITS_ERROR:'+out[1]
+			print('HHBLITS_ERROR:'+out[1], file=sys.stderr)
 			getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+dsspfile+' '+rd)
 			sys.exit(4)
 		ali2fasta(blastfile+'x',blastfile)
 		getstatusoutput('rm '+blastfile+'x')
 	if os.path.isfile(hsspfile)==False:
 		cmd=pprof+' '+seqfile+' '+blastfile+' '+hsspfile
-		print >> sys.stderr,'3) Generate HSSP File'
-		print >> sys.stderr,cmd
+		print('3) Generate HSSP File', file=sys.stderr)
+		print(cmd, file=sys.stderr)
 		out=getstatusoutput(cmd)
 		if out[0]!=0:
-			print >> sys.stderr,'HSSP_ERROR:'+out[1]
-			getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+dsspfile+' '+blastfile+' '+rd)
+			print('HSSP_ERROR:'+out[1], file=sys.stderr)
+			# getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+dsspfile+' '+blastfile+' '+rd)
 			sys.exit(5)
 	return chainfile,dsspfile,hsspfile
 
@@ -447,7 +447,7 @@ def get_muts_score(chainfile,chain,dsspfile,hsspfile,muts,pots,d,win=2,outdir=No
 	s_hyd,l_hssp=get_pot_prof(hsspfile,l_nmut,pots[0])
 	s_sub=get_subs_prof(hsspfile,l_nmut,pots[1])
 	s_pro=get_seq_prof(hsspfile,l_nmut,win,pots[2])
-	for i in l_mut.keys():
+	for i in list(l_mut.keys()):
 		v_mut=l_mut[i]
 		n=len(v_mut)
 		hs=s_hyd.get(i,[])
@@ -456,10 +456,10 @@ def get_muts_score(chainfile,chain,dsspfile,hsspfile,muts,pots,d,win=2,outdir=No
 		s3=s_3d.get(i,[])
 		rsa=d_rsa.get(i,[])
 		if len(hs)==0 or len(ss)==0 or len(ps)==0:
-			print >> sys.stderr,'WARNING: Incorrect profile calculation for mutation',i
+			print('WARNING: Incorrect profile calculation for mutation',i, file=sys.stderr)
 			continue
 		if len(s3)==0 or len(rsa)==0:
-			print >> sys.stderr,'WARNING: Incorrect structural features for mutation',i
+			print('WARNING: Incorrect structural features for mutation',i, file=sys.stderr)
 			continue
 		l_data[i]=[]
 		for j in range(n):
@@ -478,7 +478,7 @@ def print_data(pdbfile,chain,l_data,l_hssp,lres_env,verb,sep=','):
 	nfile=pdbfile.split('/')[-1]
 	s_mut=[]
 	out_data=[]
-	for mut in l_data.keys():
+	for mut in list(l_data.keys()):
 		try:
 			s_mut.append([[int(i[1:-1]) for i in mut.split(sep)],mut])
 		except:
@@ -497,7 +497,7 @@ def print_data(pdbfile,chain,l_data,l_hssp,lres_env,verb,sep=','):
 			f1=(1.1-vm[5]*0.01)
 			pred=(0.18*vm[0]+0.20*vm[1]-0.29*vm[2]-0.33*vm[3])*f1
 			pm.append(pred)
-			for k in range(4)+[5]: v[k].append('%.3f' %vm[k])
+			for k in list(range(4))+[5]: v[k].append('%.3f' %vm[k])
 			v[7].append('|'.join([str(f) for f in l_hssp[mut][j]]))
 			v[8].append('|'.join([r+p for r,p in lres_env[mut][j]]))
 			#print line+'\t'+str(j+1)+'\t'+'\t'.join([str(round(i,3)) for i in vm])+'\t'+str(round(pred,1))
@@ -525,18 +525,18 @@ if __name__ == '__main__':
 	chainfile,dsspfile,hsspfile=run_3d_pipeline(pdbfile,chain,pblast,uniref90,outdir)
 	l_data,l_hssp,lres_env=get_muts_score(chainfile,chain,dsspfile,hsspfile,muts,pots,d,win,outdir)
 	if len(l_data)==0: 
-		print >> sys.stderr,'ERROR: Incorrect mutation list.'
+		print('ERROR: Incorrect mutation list.', file=sys.stderr)
 		sys.exit()
 	out_data=print_data(pdbfile,chain,l_data,l_hssp,lres_env,verb)
 	if len(out_data)==0:
-		print >> sys.stderr,'ERROR: No predictions returned. Check your input.'
+		print('ERROR: No predictions returned. Check your input.', file=sys.stderr)
 		sys.exit(1)
 	if not outfile:
-		for line in out_data: print line.rstrip()
+		for line in out_data: print(line.rstrip())
 	else:
 		try:
 			fout=open(outfile,'w')
 			fout.writelines(out_data)
 			fout.close()
 		except:
-			print >> sys.stderr,'ERROR: File',outfile,'can not be saved.'
+			print('ERROR: File',outfile,'can not be saved.', file=sys.stderr)
