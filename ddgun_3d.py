@@ -85,8 +85,9 @@ def get_options():
 	dmax=5.0
 	pdbfile=args.pdbfile
 	chain=args.chain
-	if os.path.isfile(pdbfile)==False:	
-		print('ERROR: Incorrect PDB file '+pdbfile+'.', file=sys.stderr)
+	if os.path.isfile(pdbfile)==False:
+		print('ERROR: PDB File Not-Found ' + pdbfile + '.', file=sys.stderr)
+		print('The current working directory is : ', os.getcwd())
 		sys.exit(1)
 	if args.aa1: aa1=args.aa1
 	if args.aa2: aa2=args.aa2
