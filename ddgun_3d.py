@@ -434,7 +434,7 @@ def run_3d_pipeline(pdbfile,chain,blast_prog=pblast,db=uniref90,outdir=None,atom
 		out=getstatusoutput(cmd)
 		if out[0]!=0:
 			print('HSSP_ERROR:'+out[1], file=sys.stderr)
-			# getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+dsspfile+' '+blastfile+' '+rd)
+			getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+dsspfile+' '+blastfile+' '+rd)
 			sys.exit(5)
 	return chainfile,dsspfile,hsspfile
 
