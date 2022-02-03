@@ -1,4 +1,4 @@
-# DDGun
+# DDGun (This repository also contains my modifications of the original source code)
 
 
 #### INTRODUCTION
