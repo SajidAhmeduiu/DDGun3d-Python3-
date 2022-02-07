@@ -403,8 +403,10 @@ def run_3d_pipeline(pdbfile,chain,blast_prog=pblast,db=uniref90,outdir=None,atom
 	chainfile=tmpdir+'/'+pdbname+'.'+chain
 	dsspfile=chainfile+'.dssp'
 	seqfile=chainfile+'.fasta'
-	blastfile=chainfile+'.blast'
-	hsspfile=chainfile+'.hssp'
+	# This is where the filenames are being set alongwith directory
+	global hssp_filedir, blast_filedir
+	blastfile= os.path.join(blast_filedir, pdbname + '.' + chain + '.blast')
+	hsspfile = os.path.join(hssp_filedir, pdbname + '.' + chain + '.hssp')
 	och=get_pdbchain(pdbfile,chain,atoms)
 	och.writePDB(chainfile,[],'Y',chain,'Y')
 	seq=och.getSequence()
@@ -428,7 +430,7 @@ def run_3d_pipeline(pdbfile,chain,blast_prog=pblast,db=uniref90,outdir=None,atom
 		getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+rd)
 		sys.exit(3)
 	# Generate, process, and save blastfile if it is not already stored in ```blast_filedir```
-	if os.path.isfile(os.path.join(blast_filedir,blastfile))==False:
+	if os.path.isfile(blastfile)==False:
 		#cmd=blast_prog+' -i '+seqfile+' -d '+db+' -e '+str(e)+' -j 1 -b 1000 -v 1000 -o '+blastfile
 		cmd=blast_prog+' -d  '+db+'  -i '+seqfile+' -opsi '+blastfile+'x  -n 2 -cpu 4 '
 		print('2) Run HHBLITS Search', file=sys.stderr)
@@ -439,13 +441,13 @@ def run_3d_pipeline(pdbfile,chain,blast_prog=pblast,db=uniref90,outdir=None,atom
 			getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+dsspfile+' '+rd)
 			sys.exit(4)
 		# The blastfile is being written in ```blast_filedir``` instead of the current directory
-		ali2fasta(blastfile+'x',os.path.join(blast_filedir,blastfile))
+		ali2fasta(blastfile+'x',blastfile)
 		# Remove blastx file from the current directory and use the stored blastfile from this part of the program onwards
 		getstatusoutput('rm '+blastfile+'x')
 
-	if os.path.isfile(os.path.join(hssp_filedir,hsspfile))==False:
+	if os.path.isfile(hsspfile)==False:
 		# The blastfile has to be read from ```blast_filedir``` instead of the current directory
-		cmd=pprof+' '+seqfile+' '+os.path.join(blast_filedir,blastfile)+' '+hsspfile
+		cmd=pprof+' '+seqfile+' '+ blastfile + ' ' + hsspfile
 		print('3) Generate HSSP File', file=sys.stderr)
 		print(cmd, file=sys.stderr)
 		out=getstatusoutput(cmd)
@@ -455,14 +457,14 @@ def run_3d_pipeline(pdbfile,chain,blast_prog=pblast,db=uniref90,outdir=None,atom
 			getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+dsspfile+' '+rd)
 			sys.exit(5)
 		# Move the hssp file from current directory to ```hssp_filedir```
-		cmd = "mv " + hsspfile + " " + hssp_filedir
-		out = getstatusoutput(cmd)
-
-		# If hssp file-saving failed for some reason, exit loudly
-		if out[0] != 0:
-			print("HSSP FILE COULD NOT BE MOVED")
-			sys.exit(6)
-	return chainfile,dsspfile,os.path.join(hssp_filedir,hsspfile)
+		# cmd = "mv " + hsspfile + " " + hssp_filedir
+		# out = getstatusoutput(cmd)
+		#
+		# # If hssp file-saving failed for some reason, exit loudly
+		# if out[0] != 0:
+		# 	print("HSSP FILE COULD NOT BE MOVED")
+		# 	sys.exit(6)
+	return chainfile,dsspfile,hsspfile
 
 
 def get_muts_score(chainfile,chain,dsspfile,hsspfile,muts,pots,d,win=2,outdir=None):
