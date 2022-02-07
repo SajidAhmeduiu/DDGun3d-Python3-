@@ -29,17 +29,21 @@ import os, sys, pickle, tempfile, argparse
 from subprocess import getstatusoutput
 import numpy as np
 
-global pblast, uniref90, at, pdssp, pprof, prog_path, data_path, aalist
+global pblast, uniref90, at, pdssp, pprof, prog_path, data_path, aalist, blast_filedir
 prog_path=os.path.dirname(os.path.abspath(__file__))
 data_path=prog_path+'/data'
 tool_path=prog_path+'/tools'
 util_path=prog_path+'/utils'
 data_path=prog_path+'/data'
-sys.path.append(tool_path)
+# This '/blast_filedir' will serve as a cache-storage for all the blast files that the program encounters
+# so that the later executions on the same chain are much faster
+blast_filedir = prog_path+'/blast_filedir'
+# The '/hssp_filedir' will serve similar purpose as the 'blast_filedir'
+hssp_filedir = prog_path+'/hssp_filedir'
 
-import pdbTools as pdb
-import dsspTools as dssp
-from hsspTools import readHSSP, hssp2dic
+import tools.pdbTools as pdb
+import tools.dsspTools as dssp
+from tools.hsspTools import readHSSP, hssp2dic
 
 aalist='ARNDCQEGHILKMFPSTWYV'
 pprof=tool_path+'/ali2prof.py'
@@ -54,16 +58,16 @@ def get_options():
 	global uniref90, pblast
 	parser = argparse.ArgumentParser(description='Program for generating protein mutations features.')
 	#parser = OptionParser('\nUsage : python %prog  pdbfile chain mutation []')
-	parser.add_argument ('pdbfile', type=str)
-	parser.add_argument ('chain')
-	parser.add_argument ('mutations')
+	parser.add_argument ("-p", "--pdbfile",dest='pdbfile', type=str)
+	parser.add_argument ("-c","--chain",dest='chain', type=str)
+	parser.add_argument ("-mts","--mutations",dest='mutations',type=str)
 	parser.add_argument ("-o", "--out-file", action="store",type=str, dest="outfile", help="Output file")
 	parser.add_argument ("--aa1", "--aaindex1", action="store",type=str, dest="aa1", help="Potential aaindex1")
 	parser.add_argument ("--aa2", "--aaindex2", action="store",type=str, dest="aa2", help="Potential aaindex2")
 	parser.add_argument ("--aa3", "--aaindex3", action="store",type=str, dest="aa3", help="Potential aaindex3")
 	parser.add_argument ("--raa3", "--raaindex3", action="store",type=str, dest="raa3", help="Potential 3D aaindex3")
 	parser.add_argument ("-w", "--win", action="store",type=int, dest="win", help="Windows around mutation")
-	parser.add_argument ("-m", "--mutation-list",action="store_true",dest="ml", help="Mutation is parsed as a comma separated list")
+	# parser.add_argument ("-m", "--mutation-list",action="store_true",dest="ml", help="Mutation is parsed as a comma separated list")
 	parser.add_argument ("--dmin", action="store",type=float, dest="dmin", help="Minimum radius around mutation")
 	parser.add_argument ("--dmax", action="store",type=float, dest="dmax", help="Maximum radius around mutation")
 	parser.add_argument ("-v", "--verbose", action="store",type=int, dest="verb", help="Verbose output")
@@ -107,13 +111,15 @@ def get_options():
 	if not os.path.isfile(uniref90+'_a3m_db.index'):
 		print('ERROR: DB file clust30_2018_08 not found in',uniref90, file=sys.stderr)
 		sys.exit(5)
-	if args.ml:
-		if parse_mut(args.mutations): 
-			muts[sort_mut(args.mutations)]=[mut for mut in sort_mut(args.mutations).split(sep) if mut!='']
-	else:
-		if os.path.isfile(args.mutations):
-			lmut=open(args.mutations).read()
-			muts=dict((sort_mut(mut),sort_mut(mut).split(sep)) for mut in lmut.replace(' ','').split('\n') if parse_mut(mut))
+	# if args.ml:
+	# 	if parse_mut(args.mutations):
+	# 		muts[sort_mut(args.mutations)]=[mut for mut in sort_mut(args.mutations).split(sep) if mut!='']
+	# else:
+	if os.path.isfile(args.mutations):
+		lmut=open(args.mutations,"r").read()
+		# The ```parse_mut``` function seems to take specific lines from the .muts file and performs some checkings on those specific lines
+		# The ```sort_mut``` function is returning a string where the mutations are comma separated, and sorted based on mutation position
+		muts=dict((sort_mut(mut),sort_mut(mut).split(sep)) for mut in lmut.replace(' ','').split('\n') if parse_mut(mut))
 	if len(muts)==0:
 		print('ERROR: Incorrect mutation list.', file=sys.stderr)
 		sys.exit(2)
@@ -135,12 +141,18 @@ def parse_mut(imut,sep=','):
 		c=True
 		try:
 			#pos=int(mut[1:-1])
-			pos=mut[1:-1]
-			if pos in v_pos:
+			# pos=mut[1:-1]
+			# This if else statement is relly really weird
+			# Why can't I have multiple mutations for the same position in the same line?
+			# if pos in v_pos:
+			# 	print("Multiple mutations for the same position")
+			# 	c=False
+			# else:
+			# 	v_pos.append(pos)
+			# # This check seems logical, I believe this is checking for non-standard amino acids either in the wildtype or alternate residues
+			if aalist.index(mut[0])==-1 or aalist.index(mut[-1])==-1:
+				print("Illegal Amino Acids")
 				c=False
-			else:
-				v_pos.append(pos)
-			if aalist.index(mut[0])==-1 or aalist.index(mut[-1])==-1: c=False
 		except:
 			c=False
 		if not c:
@@ -148,7 +160,7 @@ def parse_mut(imut,sep=','):
 			break
 	return c
 
-
+# The mutations are being sorted by position in this function, and a str with position-wise sorted mutations are being returned
 def sort_mut(imut,sep=','):
 	v_mut=imut.split(sep)
 	try:
@@ -415,7 +427,8 @@ def run_3d_pipeline(pdbfile,chain,blast_prog=pblast,db=uniref90,outdir=None,atom
 		print('ERROR: DSSP file',chain,'not found.', file=sys.stderr)
 		getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+rd)
 		sys.exit(3)
-	if os.path.isfile(blastfile)==False:
+	# Generate, process, and save blastfile if it is not already stored in ```blast_filedir```
+	if os.path.isfile(os.path.join(blast_filedir,blastfile))==False:
 		#cmd=blast_prog+' -i '+seqfile+' -d '+db+' -e '+str(e)+' -j 1 -b 1000 -v 1000 -o '+blastfile
 		cmd=blast_prog+' -d  '+db+'  -i '+seqfile+' -opsi '+blastfile+'x  -n 2 -cpu 4 '
 		print('2) Run HHBLITS Search', file=sys.stderr)
@@ -425,18 +438,31 @@ def run_3d_pipeline(pdbfile,chain,blast_prog=pblast,db=uniref90,outdir=None,atom
 			print('HHBLITS_ERROR:'+out[1], file=sys.stderr)
 			getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+dsspfile+' '+rd)
 			sys.exit(4)
-		ali2fasta(blastfile+'x',blastfile)
+		# The blastfile is being written in ```blast_filedir``` instead of the current directory
+		ali2fasta(blastfile+'x',os.path.join(blast_filedir,blastfile))
+		# Remove blastx file from the current directory and use the stored blastfile from this part of the program onwards
 		getstatusoutput('rm '+blastfile+'x')
-	if os.path.isfile(hsspfile)==False:
-		cmd=pprof+' '+seqfile+' '+blastfile+' '+hsspfile
+
+	if os.path.isfile(os.path.join(hssp_filedir,hsspfile))==False:
+		# The blastfile has to be read from ```blast_filedir``` instead of the current directory
+		cmd=pprof+' '+seqfile+' '+os.path.join(blast_filedir,blastfile)+' '+hsspfile
 		print('3) Generate HSSP File', file=sys.stderr)
 		print(cmd, file=sys.stderr)
 		out=getstatusoutput(cmd)
 		if out[0]!=0:
 			print('HSSP_ERROR:'+out[1], file=sys.stderr)
-			getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+dsspfile+' '+blastfile+' '+rd)
+			# The blastfile is being kept stored in ```blast_filedir``` instead of being deleted even if there is HSSP ERROR
+			getstatusoutput('rm -r '+chainfile+' '+seqfile+' '+dsspfile+' '+rd)
 			sys.exit(5)
-	return chainfile,dsspfile,hsspfile
+		# Move the hssp file from current directory to ```hssp_filedir```
+		cmd = "mv " + hsspfile + " " + hssp_filedir
+		out = getstatusoutput(cmd)
+
+		# If hssp file-saving failed for some reason, exit loudly
+		if out[0] != 0:
+			print("HSSP FILE COULD NOT BE MOVED")
+			sys.exit(6)
+	return chainfile,dsspfile,os.path.join(hssp_filedir,hsspfile)
 
 
 def get_muts_score(chainfile,chain,dsspfile,hsspfile,muts,pots,d,win=2,outdir=None):
@@ -525,7 +551,8 @@ if __name__ == '__main__':
 	pdbfile,chain,muts,pots,d,win,verb,outfile,outdir=get_options()
 	chainfile,dsspfile,hsspfile=run_3d_pipeline(pdbfile,chain,pblast,uniref90,outdir)
 	l_data,l_hssp,lres_env=get_muts_score(chainfile,chain,dsspfile,hsspfile,muts,pots,d,win,outdir)
-	if len(l_data)==0: 
+	if len(l_data)==0:
+		print("From len(l_data)==0")
 		print('ERROR: Incorrect mutation list.', file=sys.stderr)
 		sys.exit()
 	out_data=print_data(pdbfile,chain,l_data,l_hssp,lres_env,verb)
