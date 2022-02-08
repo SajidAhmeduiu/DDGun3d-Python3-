@@ -133,22 +133,22 @@ def get_pdbchain(pdbfile,chain,atoms=at):
 	och=pdb.readPDB(pdbfile,chain,atoms)
 	return och 
 
-
-def parse_mut(imut,sep=','):
+# Need to send a separate flag for saying whether I want to calculate total DDG or not
+def parse_mut(imut,sep=',',calculate_total_DDG=True):
 	v_mut=imut.split(sep)
 	v_pos=[]
 	for mut in v_mut:
 		c=True
 		try:
-			#pos=int(mut[1:-1])
-			# pos=mut[1:-1]
-			# This if else statement is relly really weird
-			# Why can't I have multiple mutations for the same position in the same line?
-			# if pos in v_pos:
-			# 	print("Multiple mutations for the same position")
-			# 	c=False
-			# else:
-			# 	v_pos.append(pos)
+			if calculate_total_DDG:
+				#pos=int(mut[1:-1])
+				pos=mut[1:-1]
+				# This if-else statement is here so that total DDG calculation makes sense
+				if pos in v_pos:
+					print("Multiple mutations for the same position")
+					c=False
+				else:
+					v_pos.append(pos)
 			# # This check seems logical, I believe this is checking for non-standard amino acids either in the wildtype or alternate residues
 			if aalist.index(mut[0])==-1 or aalist.index(mut[-1])==-1:
 				print("Illegal Amino Acids")
